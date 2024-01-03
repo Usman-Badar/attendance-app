@@ -46,7 +46,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.usmanbadar.attendanceapp",
-      "versionCode": 11,
+      "versionCode": 12,
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyCXf-3r_0uMjpEzwZKA_MfIVBMbCY8xAlo"

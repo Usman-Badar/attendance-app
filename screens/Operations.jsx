@@ -13,9 +13,17 @@ import Toast from '@ant-design/react-native/lib/toast';
 import axios from 'axios';
 import * as Speech from 'expo-speech';
 import Emp from '../assets/208-2088909_professional-employee-png-transparent-png-download.png';
+import {Dimensions} from "react-native";
+import { Platform, NativeModules } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { Avatar } from 'react-native-paper';
+const { StatusBarManager } = NativeModules;
+
+const {width, height} = Dimensions.get("window");
 
 const Operations = ( { route, navigation } ) => {
 
+  const STATUSBAR_HEIGHT = Platform.OS === 'ios' ? 20 : StatusBarManager.HEIGHT;
   const LocationsDirectory = FileSystem.documentDirectory + '/locations';
   const LocationsFile = LocationsDirectory + '/locations.txt';
   const AttendanceDirectory = FileSystem.documentDirectory + '/attendance';
@@ -23,7 +31,7 @@ const Operations = ( { route, navigation } ) => {
 
   const alertOpacity = useRef(new Animated.Value(0)).current;
   const alertTop = useRef(new Animated.Value(100)).current;
-  const api = axios.create({timeout: 3000});
+  const api = axios.create({timeout: 10000});
   const { name, emp_id, url, temp_emp_id } = route.params;
 
   const [ LocationID, setLocationID ] = useState(
@@ -46,6 +54,7 @@ const Operations = ( { route, navigation } ) => {
   const [ Relations, setRelations ] = useState([]);
   const [ ConfirmingRequest, setConfirmingRequest ] = useState(false);
   const [ SelectingLocation, setSelectingLocation ] = useState(false);
+  const [ openAttMenu, setOpenAttMenu ] = useState(false);
   const [ StartShift, setStartShift ] = useState(true);
 	const [ PermissionStatus, setPermissionStatus ] = useState('');
   const [ Position, setPosition ] = useState(
@@ -133,6 +142,7 @@ const Operations = ( { route, navigation } ) => {
     }
   }
   async function getCoordinates() {
+    Toast.loading('Loading your Coordinates...');
     await Location.watchPositionAsync({accuracy: Location.Accuracy.High, timeInterval: 1000, distanceInterval: 1}, ({ coords }) => {
       setPosition({lat: coords.latitude, long: coords.longitude});
       // setTimeout(() => {
@@ -157,26 +167,28 @@ const Operations = ( { route, navigation } ) => {
     return Value * Math.PI / 180;
   }
   const FetchAttendance = (id, ip, temp_emp_id) => {
-    Toast.loading('Fetching Your Attendance...');
-    const host = ip;
-    api.post(`${host}/gettodaysattendance`, { empID: id, temp_emp_id: temp_emp_id }).then(res => {
-      if (res.data[0] === undefined || res.data[0].time_in === null) {
-        setStartShift(true);
-      }else 
-      {
-        setStartShift(false);
-      }
-    }).catch(err => {
-      Toast.offline(err.message);
-    })
+    // Toast.loading('Loading your Data...');
+    // const host = ip;
+    // api.post(`${host}/gettodaysattendance`, { empID: id, temp_emp_id: temp_emp_id }).then(res => {
+    //   if (res.data[0] === undefined || res.data[0].time_in === null) {
+    //     setStartShift(true);
+    //   }else 
+    //   {
+    //     setStartShift(false);
+    //   }
+    // }).catch(err => {
+    //   Toast.offline(err.message);
+    // })
   }
   const TimeIn = () => {
 
     if (!LocationID.location_code) {
-      Alert.alert('Validation Error', 'Please select location');
+      Alert.alert('No Location Found', 'First you have to select a location, then you can in/out your shift.');
+      setSelectingLocation(true);
+      setOpenAttMenu(false);
       return false;
     }else if (Position.lat === 0 || Position.long === 0) {
-      Alert.alert('Validation Error', "Couldn't find your location, it seems like you turned off your location.");
+      Alert.alert('Validation Error', "Couldn't find your location, it seems like you've turned off your location.");
       return false;
     }
 
@@ -185,43 +197,43 @@ const Operations = ( { route, navigation } ) => {
     {
       const location_code = LocationID.location_code;
       Toast.loading("Please Wait...");
-      saveIntoFile();
+      // saveIntoFile();
       setLocationID(
         {
           ...LocationID,
           location_code: undefined
         }
       );
-      saveIntoFile(emp_id, JSON.stringify(Position), location_code, 'IN');
-      // api.post(
-      //   url + '/attendance_request/mark_thumb',
-      //   {
-      //     empID: emp_id,
-      //     position: JSON.stringify(Position),
-      //     location_code: location_code
-      //   }
-      // ).then(
-      //   () => {
-      //     api.post(
-      //       url + '/timein',
-      //       {
-      //         empID: emp_id,
-      //         temp_emp_id: temp_emp_id
-      //       }
-      //     ).then(
-      //       () => {
-      //         Speech.speak("Shift Started");
-      //         Modal.alert(
-      //             'Time In Marked', 
-      //             'You can check your attendance online, your time in has been marked.', 
-      //             [
-      //                 { text: 'Thank You', onPress: () => navigation.navigate('Auth', { url: url }) },
-      //             ]
-      //         );
-      //       }
-      //     );
-      //   }
-      // );
+      // saveIntoFile(emp_id, JSON.stringify(Position), location_code, 'IN');
+      api.post(
+        url + '/attendance_request/mark_thumb',
+        {
+          empID: emp_id,
+          position: JSON.stringify(Position),
+          location_code: location_code
+        }
+      ).then(
+        () => {
+          api.post(
+            url + '/timein',
+            {
+              empID: emp_id,
+              temp_emp_id: temp_emp_id
+            }
+          ).then(
+            () => {
+              Speech.speak("Shift Started");
+              Modal.alert(
+                  'Time In Marked', 
+                  'You can check your attendance online, your time in has been marked.', 
+                  [
+                      { text: 'Thank You', onPress: () => navigation.navigate('Auth', { url: url }) },
+                  ]
+              );
+            }
+          );
+        }
+      );
     }else
     {
       AttendanceRequest(); 
@@ -231,10 +243,12 @@ const Operations = ( { route, navigation } ) => {
   const TimeOut = () => {
 
     if (!LocationID.location_code) {
-      Alert.alert('Validation Error', 'Please select location');
+      Alert.alert('No Location Found', 'First you have to select a location, then you can in/out your shift.');
+      setSelectingLocation(true);
+      setOpenAttMenu(false);
       return false;
     }else if (Position.lat === 0 || Position.long === 0) {
-      Alert.alert('Validation Error', "Couldn't find your location, it seems like you turned off your location.");
+      Alert.alert('Validation Error', "Couldn't find your location, it seems like you've turned off your location.");
       return false;
     }
 
@@ -249,36 +263,36 @@ const Operations = ( { route, navigation } ) => {
           location_code: undefined
         }
       )
-      saveIntoFile(emp_id, JSON.stringify(Position), location_code, 'OUT');
-      // api.post(
-      //   url + '/attendance_request/mark_thumb',
-      //   {
-      //     empID: emp_id,
-      //     position: JSON.stringify(Position),
-      //     location_code: location_code
-      //   }
-      // ).then(
-      //   () => {
-      //     api.post(
-      //       url + '/timeout',
-      //       {
-      //         empID: emp_id,
-      //         temp_emp_id: temp_emp_id
-      //       }
-      //     ).then(
-      //       () => {
-      //         Speech.speak("Shift Ended");
-      //         Modal.alert(
-      //             'Time Out Marked', 
-      //             'You can check your attendance online, your time out has been marked.', 
-      //             [
-      //                 { text: 'Thank You', onPress: () => navigation.navigate('Auth', { url: url }) },
-      //             ]
-      //         );
-      //       }
-      //     );
-      //   }
-      // );
+      // saveIntoFile(emp_id, JSON.stringify(Position), location_code, 'OUT');
+      api.post(
+        url + '/attendance_request/mark_thumb',
+        {
+          empID: emp_id,
+          position: JSON.stringify(Position),
+          location_code: location_code
+        }
+      ).then(
+        () => {
+          api.post(
+            url + '/timeout',
+            {
+              empID: emp_id,
+              temp_emp_id: temp_emp_id
+            }
+          ).then(
+            () => {
+              Speech.speak("Shift Ended");
+              Modal.alert(
+                  'Time Out Marked', 
+                  'You can check your attendance online, your time out has been marked.', 
+                  [
+                      { text: 'Thank You', onPress: () => navigation.navigate('Auth', { url: url }) },
+                  ]
+              );
+            }
+          );
+        }
+      );
     }else
     {
       AttendanceRequest(); 
@@ -371,55 +385,60 @@ const Operations = ( { route, navigation } ) => {
   if ( ConfirmingRequest )
   {
     return (
-      <View style={{ padding: 10, paddingTop: 50, backgroundColor: '#202124', flex: 1, justifyContent: 'center' }}>
-        <Text style={{ fontSize: 20, textAlign: "center", color: "#fff" }}>Attendance Request : Time {MarkFor}</Text>
-        <View style={{alignSelf: "center", width: "90%", height: 1, backgroundColor: "#fff", marginVertical: 10}}></View>
-        <View style={{alignSelf: "center", width: "70%", height: 1, backgroundColor: "#fff", marginVertical: 10}}></View>
-        <View style={{alignSelf: "center", width: "50%", height: 1, backgroundColor: "#fff", marginVertical: 10}}></View>
-        <Text style={{ marginBottom: 20, color: "#57A2D5", textAlign: "center" }}>All the following fields are required.</Text>
-        <View style={{ backgroundColor: "rgb(233, 154, 40)", padding: 10, marginBottom: 15, borderRadius: 10 }}>
-          <Text>If you're in the location and still you see this option to send attendance request, kindly turn off and on your location and restart the application.</Text>
-        </View>
-        
-        <Text style={{ marginBottom: 0, marginLeft: 5, fontWeight: 'bold', color: "#fff" }}>Submit To</Text>
-        {
-          Relations.length === 0
-          ?
-          <Text style={{ marginBottom: 0, textAlign: 'center', color: "rgb(233, 154, 40)", backgroundColor: 'rgba(233, 154, 40, .2)', paddingVertical: 15, borderRadius: 5, marginTop: 10 }}>No Superior Found</Text>
-          :
-          Relations.map(
-            ( val, index ) => {
-              return (
-                <Radio style={{ marginVertical: 15 }} onChange={ () => setSubmitTo( val.sr ) } checked={ SubmitTo ? SubmitTo === val.sr : false } key={ index }>
-                  <Text style={{color: "#fff"}}>{ val.name }</Text>
-                </Radio>
+      <KeyboardAwareScrollView>
+        <View style={{height: height, marginTop: STATUSBAR_HEIGHT }}>
+          <ScrollView style={{ padding: 10, paddingTop: 30, backgroundColor: '#202124', height: height * 0.5}} automaticallyAdjustKeyboardInsets={true} showsVerticalScrollIndicator={false}>
+            <Text style={{ fontSize: 15, textAlign: "center", color: "#fff" }}>Attendance Request : Time {MarkFor}</Text>
+            <View style={{alignSelf: "center", width: "90%", height: 1, backgroundColor: "#fff", marginVertical: 5}}></View>
+            <View style={{alignSelf: "center", width: "70%", height: 1, backgroundColor: "#fff", marginVertical: 5}}></View>
+            <View style={{alignSelf: "center", width: "50%", height: 1, backgroundColor: "#fff", marginVertical: 5}}></View>
+            <Text style={{ marginVertical: 10, color: "#fff", textAlign: "center" }}>All the following fields are required.</Text>
+            <View style={{ backgroundColor: "rgba(255, 255, 255, 0.7)", paddingVertical: 10, paddingHorizontal: 20, marginBottom: 15, borderRadius: 10 }}>
+              <Text style={{textAlign: 'justify', fontSize: 12}}>If you're in the location and still you're seeing option to send attendance request, kindly turn off and on your location and restart the application.</Text>
+            </View>
+            
+            <Text style={{ marginBottom: 0, marginLeft: 5, fontWeight: 'bold', color: "#fff" }}>Submit To</Text>
+            {
+              Relations.length === 0
+              ?
+              <Text style={{ marginBottom: 0, textAlign: 'center', color: "rgb(233, 154, 40)", backgroundColor: 'rgba(233, 154, 40, .2)', paddingVertical: 15, borderRadius: 5, marginTop: 10 }}>No Superior Found</Text>
+              :
+              Relations.map(
+                ( val, index ) => {
+                  return (
+                    <Radio style={{ marginVertical: 10 }} onChange={ () => setSubmitTo( val.sr ) } checked={ SubmitTo ? SubmitTo === val.sr : false } key={ index }>
+                      <Text style={{color: "#fff"}}>{ val.name }</Text>
+                    </Radio>
+                  )
+                }
               )
             }
-          )
-        }
 
-        <Text style={{ marginTop: 10, marginBottom: 5, marginLeft: 5, fontWeight: 'bold', color: "#fff" }}>Reason</Text>
-        <TextareaItem
-          rows={4}
-          placeholder="Enter Your Reason"
-          autoHeight
-          style={{ paddingTop: 5, borderRadius: 10, fontSize: 15, height: 70 }}
-          onChangeText={ ( text ) => setReason(text) }
-        />
-        <Text style={{ marginBottom: 5, marginLeft: 5, color: "#fff" }}>{Reason.length}/20</Text>
+            <Text style={{ marginTop: 10, marginBottom: 5, marginLeft: 5, fontWeight: 'bold', color: "#fff" }}>Reason</Text>
+            <TextareaItem
+              rows={4}
+              placeholder="Enter Your Reason"
+              autoHeight
+              style={{ paddingTop: 10, borderRadius: 5, fontSize: 15, height: 70 }}
+              onChangeText={ ( text ) => setReason(text) }
+            />
+            <Text style={{ marginBottom: 5, marginLeft: 5, color: "#fff" }}>{Reason.trim().length}/20</Text>
 
-        {
-          SubmitTo && Reason.length >= 20
-          ?
-          <TouchableOpacity onPress={ submitAttRequest } style={{ zIndex: 1, marginTop: 15, backgroundColor: '#0C8173', width: '100%', padding: 15, borderRadius: 10 }}>
-            <Text style={{ color: '#fff', textAlign: 'center', fontSize: 17 }}>Submit</Text>
-          </TouchableOpacity>
-          :null
-        }
-        <TouchableOpacity onPress={ () => setConfirmingRequest() } style={{ backgroundColor: '#E99A28', width: '100%', padding: 15, borderRadius: 10, marginTop: 15, zIndex: 1 }}>
-          <Text style={{ color: '#fff', textAlign: 'center', fontSize: 17 }}>Close</Text>
-        </TouchableOpacity>
-      </View>
+            {
+              SubmitTo && Reason.trim().length >= 20
+              ?
+              <TouchableOpacity onPress={ submitAttRequest } style={{ zIndex: 1, marginTop: 15, backgroundColor: '#fff', width: '100%', padding: 10, borderRadius: 5 }}>
+                <Text style={{ color: '#000', textAlign: 'center', fontSize: 13 }}>Submit</Text>
+              </TouchableOpacity>
+              :null
+            }
+            <TouchableOpacity onPress={ () => setConfirmingRequest() } style={{ backgroundColor: '#4385F5', width: '100%', padding: 10, borderRadius: 5, marginTop: 15, zIndex: 1 }}>
+              <Text style={{ color: '#fff', textAlign: 'center', fontSize: 13 }}>Close</Text>
+            </TouchableOpacity>
+            <View style={{height: height * 0.2}}></View>
+          </ScrollView>
+        </View>
+      </KeyboardAwareScrollView>
     )
   }
   
@@ -436,13 +455,18 @@ const Operations = ( { route, navigation } ) => {
       {
         LocationID.location_code
         ?
-        <View style={{backgroundColor: '#4385F5', padding: 10, width: '100%', position: 'absolute', top: 30, left: 0, zIndex: 1, flexDirection: 'row', justifyContent: 'center'}}>
-          <Text style={{backgroundColor: '#fff', color: '#4385F5', padding: 10, borderRadius: 10}}>{LocationID.location_name}</Text>
+        <View style={{padding: 10, width: '100%', position: 'absolute', top: 30, left: 0, zIndex: 1, flexDirection: 'row', justifyContent: 'center'}}>
+          <Text style={{backgroundColor: '#4385F5', color: '#fff', paddingVertical: 2, paddingHorizontal: 10, borderRadius: 5}}>{LocationID.location_name}</Text>
         </View>
         :null
       }
       <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', width: '100%', bottom: 0, zIndex: 1, position: 'absolute' }}>
-        {
+        <TouchableOpacity onPress={ () => setOpenAttMenu(!openAttMenu) } style={{ width: '25%', padding: 15, alignItems: 'center', position: 'relative' }}>
+          {DataPendingForUpdate?<View style={{top: 3, right: -10, width: 8, height: 8, borderRadius: 10, backgroundColor: 'red'}}></View>:null}
+          <AntDesign name="earth" size={24} color="black" />
+          <Text style={{ textAlign: 'center', fontSize: 10 }}>Mark</Text>
+        </TouchableOpacity>
+        {/* {
           StartShift
           ?
           <TouchableOpacity onPress={TimeIn} style={{ width: '25%', padding: 15, alignItems: 'center' }}>
@@ -454,21 +478,25 @@ const Operations = ( { route, navigation } ) => {
             <MaterialCommunityIcons name="clock-alert" size={24} color="black" />
             <Text style={{ textAlign: 'center', fontSize: 10 }}>End</Text>
           </TouchableOpacity>
-        }
+        } */}
         <TouchableOpacity onPress={ () => setSelectingLocation(!SelectingLocation) } style={{ width: '25%', padding: 15, alignItems: 'center' }}>
           <Entypo name="location" size={24} color="black" />
           <Text style={{ textAlign: 'center', fontSize: 10 }}>Location</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={ () => setSelectingLocation(!SelectingLocation) } style={{ width: '25%', padding: 15, alignItems: 'center', position: 'relative' }}>
-          {DataPendingForUpdate?<View style={{top: 3, right: -10, width: 8, height: 8, borderRadius: 10, backgroundColor: 'red'}}></View>:null}
-          <AntDesign name="earth" size={24} color="black" />
-          <Text style={{ textAlign: 'center', fontSize: 10 }}>Mark</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={reload} style={{ width: '25%', padding: 15, alignItems: 'center' }}>
           <SimpleLineIcons name="reload" size={24} color="black" />
           <Text style={{ textAlign: 'center', fontSize: 10 }}>Reload</Text>
         </TouchableOpacity>
+        <TouchableOpacity onPress={ () => setOpenAttMenu(!openAttMenu) } style={{ width: '25%', padding: 15, alignItems: 'center', position: 'relative' }}>
+          <Avatar.Text
+            style={{backgroundColor: '#4385F5'}}
+            label={name.substring(0,1)}
+            color={'#ffffff'}
+            size={40}
+          />
+        </TouchableOpacity>
       </View>
+      {console.log(Position)}
       {
         Position.lat !== 0 && Position.long !== 0
         ?
@@ -486,33 +514,32 @@ const Operations = ( { route, navigation } ) => {
           userLocationPriority="high"
           >
           {
-            LocationID.latitude && LocationID.longitude
-            ?
-            <>
-              <Marker
-                key={ 1 }
-                coordinate={{
-                  latitude: parseFloat(LocationID.latitude),
-                  longitude: parseFloat(LocationID.longitude),
-                }}    
-                title={LocationID.location_name}
-                description={ LocationID.location_address }
-                // image={{uri: 'https://i.ibb.co/sj5Hb8F/office-building-concept-Q9x-A343-600.png'}}
-              >
-                <Image source={require('../assets/home.png')} style={{height: 40, width: 40 }} />
-              </Marker>
-              <Circle
-                center={{
-                  latitude: parseFloat(LocationID.latitude),
-                  longitude: parseFloat(LocationID.longitude),
-                }}
-                strokeColor={'#2abbac'}
-                strokeWidth={2}
-                fillColor={ 'rgba(37, 55, 84, 0.2)' }
-                radius={500}
-              />
-            </>
-            :null
+            LocationID.latitude && LocationID.longitude && (
+              <>
+                <Marker
+                  key={ 1 }
+                  coordinate={{
+                    latitude: parseFloat(LocationID.latitude),
+                    longitude: parseFloat(LocationID.longitude),
+                  }}    
+                  title={LocationID.location_name}
+                  description={ LocationID.location_address }
+                  // image={{uri: 'https://i.ibb.co/sj5Hb8F/office-building-concept-Q9x-A343-600.png'}}
+                >
+                  <Image source={require('../assets/home.png')} style={{height: 40, width: 40 }} />
+                </Marker>
+                <Circle
+                  center={{
+                    latitude: parseFloat(LocationID.latitude),
+                    longitude: parseFloat(LocationID.longitude),
+                  }}
+                  strokeColor={'#2abbac'}
+                  strokeWidth={2}
+                  fillColor={ 'rgba(37, 55, 84, 0.2)' }
+                  radius={500}
+                />
+              </>
+            )
           }
           <Marker
             key={ 0 }
@@ -530,13 +557,33 @@ const Operations = ( { route, navigation } ) => {
         :null
       }
       {
+        openAttMenu && (
+          <>
+            <ScrollView style={{ paddingRight: 30, backgroundColor: 'rgba(255, 255, 255, 0.9)', zIndex: 2, position: 'absolute', bottom: 75, left: 30 }} showsVerticalScrollIndicator={false}>
+              <TouchableOpacity onPress={TimeIn} style={{ width: '100%', padding: 5, flexDirection: 'row', gap: 5 }}>
+                <AntDesign name="arrowright" size={20} color="black" />
+                <Text style={{ color: '#000', fontSize: 12 }}>
+                  Time In
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={TimeOut} style={{ width: '100%', padding: 5, flexDirection: 'row', gap: 5 }}>
+                <AntDesign name="arrowright" size={20} color="black" />
+                <Text style={{ color: '#000', fontSize: 12 }}>
+                  Time Out
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </>
+        )
+      }
+      {
         SelectingLocation?
         <>
-          <ScrollView style={{ padding: 20, backgroundColor: 'rgba(32, 33, 36, 0.9)', zIndex: 2, maxHeight: '50%', position: 'absolute', top: '20%', borderRadius: 15, left: '7.5%', width: '85%' }}>
-            <Text style={{ fontSize: 20, color: '#fff', marginBottom: 10 }}>Select Location</Text>
-            <TouchableOpacity key={ 99999 } onPress={ () => setLocationID({index: 99999, location_code: 99999, location_name: "Other", latitude: undefined, longitude: undefined, location_address: "Unknown Location"}) } style={{ width: '100%', padding: 10, borderBottomWidth: 1, borderColor: '#fff' }}>
-              <Text style={{ color: LocationID.index ===99999 ? '#E99A28' : '#fff', fontSize: 17 }}>
-                Other
+          <ScrollView style={{ padding: 20, backgroundColor: 'rgba(255, 255, 255, 0.9)', zIndex: 2, maxHeight: '50%', position: 'absolute', top: '20%', borderRadius: 5, left: '7.5%', width: '85%' }} showsVerticalScrollIndicator={false}>
+            <Text style={{ fontSize: 15, marginBottom: 10, fontWeight: 'bold' }}>Select Location</Text>
+            <TouchableOpacity key={ 99999 } onPress={ () => setLocationID({index: 99999, location_code: 99999, location_name: "Other", latitude: undefined, longitude: undefined, location_address: "Unknown Location"}) } style={{ width: '100%', padding: 10 }}>
+              <Text style={{ color: LocationID.index ===99999 ? '#4385F5' : '#000', fontSize: 15 }}>
+                Other Location
               </Text>
             </TouchableOpacity>
             {
@@ -544,24 +591,24 @@ const Operations = ( { route, navigation } ) => {
               Locations.map(
                 ( val, index ) => {
                   return (
-                    <TouchableOpacity key={ index } onPress={ () => setLocationID({index: index, location_code: val.location_code, location_name: val.location_name, latitude: val.latitude, longitude: val.longitude, location_address: val.address}) } style={{ width: '100%', padding: 10, borderBottomWidth: 1, borderColor: '#fff' }}>
-                      <Text style={{ color: LocationID.index === index ? '#57A2D5' : '#fff', fontSize: 17 }}>
-                        { val.location_name.length > 15 ? (val.location_name.substring(0,15)+'...') : val.location_name }
+                    <TouchableOpacity key={ index } onPress={ () => setLocationID({index: index, location_code: val.location_code, location_name: val.location_name, latitude: val.latitude, longitude: val.longitude, location_address: val.address}) } style={{ width: '100%', padding: 10 }}>
+                      <Text style={{ color: LocationID.index === index ? '#57A2D5' : '#000', fontSize: 15 }}>
+                        { val.location_name.length > 20 ? (val.location_name.substring(0,25)+'...') : val.location_name }
                       </Text>
                     </TouchableOpacity>
                   )
                 }
               )
             }
-            <View style={{ height: 15 }}></View>
+            <View style={{ height: 50 }}></View>
           </ScrollView>
-          <TouchableOpacity onPress={ () => setSelectingLocation(false) } style={{ zIndex: 2, backgroundColor: '#E99A28', padding: 10, borderRadius: 10, position: 'absolute', top: 170, right: '13%' }}>
-            <Text style={{ color: '#fff', textAlign: 'center', fontSize: 17 }}>Close</Text>
+          <TouchableOpacity onPress={ () => setSelectingLocation(false) } style={{ zIndex: 2, backgroundColor: '#4385F5', paddingVertical: 5, paddingHorizontal: 10, borderRadius: 5, position: 'absolute', top: 170, right: '13%' }}>
+            <Text style={{ color: '#fff', textAlign: 'center', fontSize: 12 }}>Close</Text>
           </TouchableOpacity>
         </>
         :null
       }
-      <Animated.Text style={{fontSize: 10, fontFamily: "antfill", borderRadius: 10, position: 'absolute', top: alertTop, textAlign: 'center', left: '35%', width: '30%', backgroundColor: "rgba(255, 255, 255, .8)", zIndex: 1, padding: 10, opacity: alertOpacity}}>Out of Location</Animated.Text>
+      <Animated.Text style={{fontSize: 10, fontFamily: "antfill", borderRadius: 10, position: 'absolute', top: alertTop, textAlign: 'center', left: '25%', width: '50%', backgroundColor: "rgba(255, 255, 255, .8)", zIndex: 1, padding: 10, opacity: alertOpacity}}>You're out of location! {Math.round(Distance)}km away.</Animated.Text>
     </>
   );
 

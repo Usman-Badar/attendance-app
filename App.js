@@ -7,6 +7,9 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import Provider from '@ant-design/react-native/lib/provider';
 import { Text } from 'react-native';
+import {Dimensions} from "react-native";
+
+const {width, height} = Dimensions.get("window");
 
 import Auth from './screens/Auth';
 import Operations from './screens/Operations';
@@ -20,7 +23,7 @@ export default function App() {
     'cinzel': require('./assets/Cinzel-Regular.ttf'),
   });
   if (!fontsLoaded) {
-    return <Text>Please Wait...</Text>
+    return <Text style={{textAlign: 'center', marginTop: height * 0.05, fontSize: 20}}>Loading...</Text>
   }
   return (
     <Provider>

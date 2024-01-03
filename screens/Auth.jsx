@@ -13,6 +13,9 @@ import TextareaItem from '@ant-design/react-native/lib/textarea-item';
 import { Ionicons } from '@expo/vector-icons';
 import { Feather } from '@expo/vector-icons';
 import { FontAwesome } from '@expo/vector-icons';
+import {Dimensions} from "react-native";
+
+const {width, height} = Dimensions.get("window");
 
 const Auth = ( { navigation } ) => {
 
@@ -21,6 +24,7 @@ const Auth = ( { navigation } ) => {
     const File = Directory + '/emp_id.txt';
     const url = 'https://202.63.220.170:3443';
 
+    const [ disabled, setDisabled ] = useState(false);
     const [ isToEnterCode, setIsToEnterCode ] = useState(false);
     const [ WhatsappNumber, setWhatsappNumber ] = useState('');
     const [ Code, setCode ] = useState('');
@@ -283,6 +287,7 @@ const Auth = ( { navigation } ) => {
 
     }
     const getCode = (otp) => {
+        setDisabled(true);
         Toast.loading("Please Wait...");
         axios.post(
             url + '/attendance/get_code',
@@ -292,6 +297,7 @@ const Auth = ( { navigation } ) => {
             }
         ).then(
             res => {
+                setDisabled(false);
                 if (res.data === 'nothing_found')
                 {
                     Modal.alert(
@@ -314,19 +320,19 @@ const Auth = ( { navigation } ) => {
                     );
                 }else if ( res.data === 'success' || res.data[0].message === 'c_success' )
                 {
-                    console.log(res.data);
                     if (res.data[0].message === 'c_success') setContractual(res.data);
                     Modal.alert(
-                        'Success', 
-                        'Registration code has been sent to your whatsapp number.', 
+                        'Code Sent', 
+                        'OTP has been sent to your entered whatsapp number, please check.', 
                         [
-                            { text: 'Okay', onPress: () => setIsToEnterCode(true) },
+                            { text: 'Close', onPress: () => setIsToEnterCode(true) },
                         ]
                     );
                 }
             }
         ).catch(
             err => {
+                setDisabled(false);
                 console.log(err);
                 setValidation(false);
                 Toast.offline(err.message);
@@ -343,6 +349,7 @@ const Auth = ( { navigation } ) => {
                 <FirstView 
                     isBiometricSupported={ isBiometricSupported }
                     Password={ Password }
+                    disabled={disabled}
 
                     setPassword={ setPassword }
                     biometricAuth={ biometricAuth }
@@ -365,6 +372,7 @@ const Auth = ( { navigation } ) => {
                     Password={ Password }
                     setPassword={ setPassword }
                     getCode={ getCode }
+                    disabled={disabled}
                 />
                 :null
             }
@@ -375,7 +383,7 @@ const Auth = ( { navigation } ) => {
 
 export default Auth;
 
-const FirstView = ( { Password, setPassword, isBiometricSupported, biometricAuth, registerYourself, setIsBiometricSupported, setIsMediaTrue } ) => {
+const FirstView = ( { disabled, Password, setPassword, isBiometricSupported, biometricAuth, registerYourself, setIsBiometricSupported, setIsMediaTrue } ) => {
 
     useEffect(
         () => {
@@ -435,13 +443,14 @@ const FirstView = ( { Password, setPassword, isBiometricSupported, biometricAuth
                             value={Password}
                             onChangeText={(id) => setPassword(id)}
                             keyboardType='numeric'
+                            disabled={disabled}
                         />
-                        <TouchableOpacity onPress={ biometricAuth } style={{ marginTop: 10, padding: 15, borderColor: '#fff', borderWidth: 1, borderRadius: 20 }}>
+                        <TouchableOpacity disabled={disabled} onPress={ biometricAuth } style={{ marginTop: 10, padding: 15, borderColor: '#fff', borderWidth: 1, borderRadius: 20 }}>
                             <Text style={{ color: '#fff', textAlign: 'center' }}>Login</Text>
                         </TouchableOpacity>
                     </View>
                 }
-                <TouchableOpacity onLongPress={ registerYourself } style={ [ styles.biometricBtn, { flex: 2, justifyContent: 'center' } ] }>
+                <TouchableOpacity disabled={disabled} onLongPress={ registerYourself } style={ [ styles.biometricBtn, { flex: 2, justifyContent: 'center' } ] }>
                     <Text style={{ textAlign: 'center', color: "#898989", backgroundColor: "rgba(255,255,255, 0.1)", paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10 }}>Register Yourself</Text>
                 </TouchableOpacity>
                 {/* url + "/assets/attendance_app_icon.png" */}
@@ -451,7 +460,7 @@ const FirstView = ( { Password, setPassword, isBiometricSupported, biometricAuth
 
 }
 
-const Registration = ( { Password, setPassword, isToEnterCode, url, WhatsappNumber, Validation, setWhatsappNumber, authenticate, Code, getCode, setCode } ) => {
+const Registration = ( { disabled, Password, setPassword, isToEnterCode, url, WhatsappNumber, Validation, setWhatsappNumber, authenticate, Code, getCode, setCode } ) => {
 
     const setUserWhatsapp = ( num ) => {
 
@@ -477,21 +486,23 @@ const Registration = ( { Password, setPassword, isToEnterCode, url, WhatsappNumb
                         isToEnterCode
                         ?
                         <View style={{ flex: 2 }}>
-                            <Text style={{ fontSize: 15, color: "#898989" }}>Registration Code</Text>
+                            <Text style={{ fontSize: 15, color: "#898989" }}>OTP</Text>
                             <TextareaItem
-                                style={styles.input}
+                                style={[styles.input, {borderRadius: 10}]}
                                 value={Code}
                                 onChangeText={(id) => setCode(id)}
                                 placeholder='Like. 123456'
                                 keyboardType='numeric'
+                                disabled={disabled}
                             />
-                            <Text style={{ color: "#fff", marginTop: 10 }}>Set Password</Text>
+                            <Text style={{ color: "#898989", marginTop: 10 }}>Set Password</Text>
                             <TextareaItem
-                                style={styles.input}
+                                style={[styles.input, {borderRadius: 10}]}
                                 secureTextEntry
                                 value={Password}
                                 onChangeText={(id) => setPassword(id)}
                                 keyboardType='numeric'
+                                disabled={disabled}
                             />
                             <TouchableOpacity disabled={ Validation } onPress={ authenticate } style={{ marginTop: 10, padding: 15, borderColor: '#fff', borderWidth: 1, borderRadius: 20 }}>
                                 <Text style={{ color: '#fff', textAlign: 'center' }}>Confirm</Text>
@@ -502,21 +513,22 @@ const Registration = ( { Password, setPassword, isToEnterCode, url, WhatsappNumb
                             <Text style={{ fontSize: 15, color: "#898989", textAlign: "center" }}>Your Whatsapp Number</Text>
                             <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'center' }}>
                                 <TextareaItem
-                                    style={[styles.input, { paddingRight: 10 }]}
+                                    style={[styles.input, { paddingRight: 10, borderTopLeftRadius: 10, borderBottomLeftRadius: 10 }]}
                                     value='92'
                                     keyboardType='numeric'
                                     disabled={ true }
                                 />
                                 <TextareaItem
-                                    style={[styles.input, { paddingRight: 10, marginLeft: 10 }]}
+                                    style={[styles.input, { paddingRight: 10, width: width * 0.7, borderTopRightRadius: 10, borderBottomRightRadius: 10 }]}
                                     value={WhatsappNumber}
                                     onChangeText={(id) => setUserWhatsapp(id)}
-                                    placeholder='Like. 923XXXXXXXXX'
+                                    placeholder='3305677890'
                                     keyboardType='numeric'
                                     maxLength={10}
+                                    disabled={disabled}
                                 />
                             </View>
-                            <TouchableOpacity onPress={ getCode } style={{ marginTop: 20, padding: 15, borderColor: '#fff', borderWidth: 1, borderRadius: 20, width: '80%', alignSelf: "center" }}>
+                            <TouchableOpacity disabled={disabled} onPress={ getCode } style={{ marginTop: 20, padding: 15, borderColor: '#fff', borderWidth: 1, borderRadius: 20, width: width * 0.8, alignSelf: "center" }}>
                                 <Text style={{ color: '#fff', textAlign: 'center' }}>Get Code</Text>
                             </TouchableOpacity>
                         </View>
@@ -547,7 +559,6 @@ const styles = StyleSheet.create(
             height: 44,
             padding: 10,
             marginVertical: 10,
-            borderRadius: 10,
         },
         biometricBtn: {
             alignItems: 'center'
