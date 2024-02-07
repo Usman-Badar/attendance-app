@@ -1,22 +1,25 @@
 import React, { useEffect, useRef, useState } from 'react';
 import MapView, { Circle, Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { ScrollView, Text, Image, View, TouchableOpacity, Animated, Alert } from 'react-native';
+import { Vibration, ScrollView, Text, Image, View, TouchableOpacity, Animated, Alert } from 'react-native';
 
 import * as FileSystem from 'expo-file-system';
-import { AntDesign, MaterialCommunityIcons, SimpleLineIcons, Entypo } from '@expo/vector-icons';
+import { AntDesign, SimpleLineIcons, Entypo } from '@expo/vector-icons';
 
 import Modal from '@ant-design/react-native/lib/modal';
 import TextareaItem from '@ant-design/react-native/lib/textarea-item';
 import Radio from '@ant-design/react-native/lib/radio';
-import Toast from '@ant-design/react-native/lib/toast';
 import axios from 'axios';
 import * as Speech from 'expo-speech';
-import Emp from '../assets/208-2088909_professional-employee-png-transparent-png-download.png';
 import {Dimensions} from "react-native";
 import { Platform, NativeModules } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Avatar } from 'react-native-paper';
+import Loader from 'react-native-modal-loader';
+import { RFPercentage } from 'react-native-responsive-fontsize';
+import { Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 const { StatusBarManager } = NativeModules;
 
 const {width, height} = Dimensions.get("window");
@@ -34,6 +37,7 @@ const Operations = ( { route, navigation } ) => {
   const api = axios.create({timeout: 10000});
   const { name, emp_id, url, temp_emp_id } = route.params;
 
+  const [ loadingState, setLoadingState ] = useState(false);
   const [ LocationID, setLocationID ] = useState(
     {
       index: undefined,
@@ -44,7 +48,7 @@ const Operations = ( { route, navigation } ) => {
       longitude: undefined
     }
   );
-  const [ Online, setOnline ] = useState(false);
+  const [ Category, setCategory ] = useState();
   const [ DataPendingForUpdate, setDataPendingForUpdate ] = useState(false);
   const [ Reason, setReason ] = useState('');
   const [ MarkFor, setMarkFor ] = useState();
@@ -122,29 +126,40 @@ const Operations = ( { route, navigation } ) => {
     }, []
   );
 
+  // async function checkLocationSaved() {
+  //   const folder = await FileSystem.getInfoAsync(LocationsDirectory);
+  //   const file = await FileSystem.getInfoAsync(LocationsFile);
+  //   if (!folder.exists) await FileSystem.makeDirectoryAsync(LocationsDirectory);
+  //   if (file.exists) {
+  //     FileSystem.readAsStringAsync(LocationsFile, { encoding: FileSystem.EncodingType.UTF8 }).then(data => {
+  //       const parsed_data = JSON.parse(data);
+  //       setLocations(parsed_data);
+  //     })
+  //   }else {
+  //     api.get(url + '/getalllocations').then(res => {
+  //       saveLocations(res.data);
+  //     });
+  //     async function saveLocations(data) {
+  //       await FileSystem.writeAsStringAsync(LocationsFile, JSON.stringify(data), { encoding: FileSystem.EncodingType.UTF8 });
+  //       setLocations(data);
+  //     }
+  //   }
+  // }
   async function checkLocationSaved() {
-    const folder = await FileSystem.getInfoAsync(LocationsDirectory);
-    const file = await FileSystem.getInfoAsync(LocationsFile);
-    if (!folder.exists) await FileSystem.makeDirectoryAsync(LocationsDirectory);
-    if (file.exists) {
-      FileSystem.readAsStringAsync(LocationsFile, { encoding: FileSystem.EncodingType.UTF8 }).then(data => {
-        const parsed_data = JSON.parse(data);
-        setLocations(parsed_data);
-      })
-    }else {
-      api.get(url + '/getalllocations').then(res => {
-        saveLocations(res.data);
-      });
-      async function saveLocations(data) {
-        await FileSystem.writeAsStringAsync(LocationsFile, JSON.stringify(data), { encoding: FileSystem.EncodingType.UTF8 });
-        setLocations(data);
-      }
-    }
+    api.get(url + '/getalllocations').then(res => {
+      setLocations(res.data);
+      // saveLocations(res.data);
+    }).catch(() => checkLocationSaved());
+    // async function saveLocations(data) {
+    //   await FileSystem.writeAsStringAsync(LocationsFile, JSON.stringify(data), { encoding: FileSystem.EncodingType.UTF8 });
+    //   setLocations(data);
+    // }
   }
   async function getCoordinates() {
-    Toast.loading('Loading your Coordinates...');
+    setLoadingState(true);
     await Location.watchPositionAsync({accuracy: Location.Accuracy.High, timeInterval: 1000, distanceInterval: 1}, ({ coords }) => {
       setPosition({lat: coords.latitude, long: coords.longitude});
+      setLoadingState(false);
       // setTimeout(() => {
       //   if(Position.lat === 0 || Position.long === 0) reload();
       // }, 3000);
@@ -167,18 +182,22 @@ const Operations = ( { route, navigation } ) => {
     return Value * Math.PI / 180;
   }
   const FetchAttendance = (id, ip, temp_emp_id) => {
-    // Toast.loading('Loading your Data...');
-    // const host = ip;
-    // api.post(`${host}/gettodaysattendance`, { empID: id, temp_emp_id: temp_emp_id }).then(res => {
-    //   if (res.data[0] === undefined || res.data[0].time_in === null) {
-    //     setStartShift(true);
-    //   }else 
-    //   {
-    //     setStartShift(false);
-    //   }
-    // }).catch(err => {
-    //   Toast.offline(err.message);
-    // })
+    const host = ip;
+    setLoadingState(true);
+    api.post(`${host}/gettodaysattstate`, { empID: id, temp_emp_id: temp_emp_id }).then(res => {
+      const attendance = res.data[0];
+      const category = res.data[1];
+      if (attendance[0] === undefined || attendance[0].time_in === null) {
+        setStartShift(true);
+      }else {
+        setStartShift(false);
+      }
+      setCategory(category);
+      setLoadingState(false);
+    }).catch(err => {
+      console.log(err);
+      FetchAttendance(id, ip, temp_emp_id)
+    });
   }
   const TimeIn = () => {
 
@@ -196,11 +215,12 @@ const Operations = ( { route, navigation } ) => {
     if ( Distance && Distance < 0.5 )
     {
       const location_code = LocationID.location_code;
-      Toast.loading("Please Wait...");
+      setLoadingState(true);
       // saveIntoFile();
       setLocationID(
         {
           ...LocationID,
+          index: null,
           location_code: undefined
         }
       );
@@ -221,19 +241,39 @@ const Operations = ( { route, navigation } ) => {
               temp_emp_id: temp_emp_id
             }
           ).then(
-            () => {
-              Speech.speak("Shift Started");
-              Modal.alert(
-                  'Time In Marked', 
-                  'You can check your attendance online, your time in has been marked.', 
-                  [
-                      { text: 'Thank You', onPress: () => navigation.navigate('Auth', { url: url }) },
-                  ]
-              );
+            async (res) => {
+              setLoadingState(false);
+              if (res.data === 'success') {
+                Speech.speak("Shift Started");
+                Modal.alert(
+                    'Time In Marked', 
+                    'You can check your attendance online, your time in has been marked.', 
+                    [
+                        { text: 'Thank You', onPress: () => navigation.navigate('Auth', { url: url }) },
+                    ]
+                );
+              }else {
+                err()
+              }
             }
-          );
+          ).catch(() => err());;
         }
-      );
+      ).catch(() => err());
+
+      async function err() {
+        const { sound } = await Audio.Sound.createAsync(
+          require("../assets/audio/sound.wav")
+        );
+        await sound.playAsync();
+        Vibration.vibrate(1 * 1000);
+        Modal.alert(
+          'Failed',
+          'Could not start your shift.',
+          [
+            { text: 'Retry' },
+          ]
+        );
+      }
     }else
     {
       AttendanceRequest(); 
@@ -256,10 +296,11 @@ const Operations = ( { route, navigation } ) => {
     if ( Distance && Distance < 0.5 )
     {
       const location_code = LocationID.location_code;
-      Toast.loading("Please Wait...");
+      setLoadingState(true);
       setLocationID(
         {
           ...LocationID,
+          index: null,
           location_code: undefined
         }
       )
@@ -280,15 +321,31 @@ const Operations = ( { route, navigation } ) => {
               temp_emp_id: temp_emp_id
             }
           ).then(
-            () => {
-              Speech.speak("Shift Ended");
-              Modal.alert(
-                  'Time Out Marked', 
-                  'You can check your attendance online, your time out has been marked.', 
+            async (res) => {
+              setLoadingState(false);
+              if (res.data === 'success') {
+                Speech.speak("Shift Ended");
+                Modal.alert(
+                    'Time Out Marked', 
+                    'You can check your attendance online, your time out has been marked.', 
+                    [
+                        { text: 'Thank You', onPress: () => navigation.navigate('Auth', { url: url }) },
+                    ]
+                );
+              }else {
+                const { sound } = await Audio.Sound.createAsync(
+                  require("../assets/audio/sound.wav")
+                );
+                await sound.playAsync();
+                Vibration.vibrate(1 * 1000);
+                Modal.alert(
+                  'Failed', 
+                  'Could not end your shift.', 
                   [
-                      { text: 'Thank You', onPress: () => navigation.navigate('Auth', { url: url }) },
+                      { text: 'Retry' },
                   ]
               );
+              }
             }
           );
         }
@@ -306,7 +363,7 @@ const Operations = ( { route, navigation } ) => {
     setSubmitTo();
     setReason('');
 
-    Toast.loading("Please Wait...");
+    setLoadingState(true);
     api.create({timeout: 2000}).post(
       url + '/attendance_request/submit',
       {
@@ -320,6 +377,7 @@ const Operations = ( { route, navigation } ) => {
       }
     ).then(
       () => {
+        setLoadingState(false);
         Modal.alert(
             'Request Sent', 
             'Your attendance request has been sent to your H.O.D. Please wait for the response.', 
@@ -328,7 +386,10 @@ const Operations = ( { route, navigation } ) => {
             ]
         );
       }
-    ).catch(err => console.log(err));
+    ).catch(err => {
+      console.log(err);
+      setLoadingState(false);
+    });
 
   }
   const AttendanceRequest = () => {
@@ -355,10 +416,9 @@ const Operations = ( { route, navigation } ) => {
     }
   }
   const reload = () => {
-    // setPosition({lat: 0, long: 0});  
-    setTimeout(() => {
-      FetchAttendance( emp_id, url, temp_emp_id );
-    }, 500);
+    FetchAttendance( emp_id, url, temp_emp_id );
+    checkLocationSaved();
+    // setPosition({lat: 0, long: 0});
   }
   async function saveIntoFile(emp_id, position, location_code, type) {
     FileSystem.readAsStringAsync(AttendanceFile, { encoding: FileSystem.EncodingType.UTF8 }).then(data => {
@@ -432,7 +492,7 @@ const Operations = ( { route, navigation } ) => {
               </TouchableOpacity>
               :null
             }
-            <TouchableOpacity onPress={ () => setConfirmingRequest() } style={{ backgroundColor: '#4385F5', width: '100%', padding: 10, borderRadius: 5, marginTop: 15, zIndex: 1 }}>
+            <TouchableOpacity onPress={ () => setConfirmingRequest() } style={{ backgroundColor: '#898989', width: '100%', padding: 10, borderRadius: 5, marginTop: 15, zIndex: 1 }}>
               <Text style={{ color: '#fff', textAlign: 'center', fontSize: 13 }}>Close</Text>
             </TouchableOpacity>
             <View style={{height: height * 0.2}}></View>
@@ -452,11 +512,12 @@ const Operations = ( { route, navigation } ) => {
 
   return (
     <>
+      <Loader loading={loadingState} color="#898989" size={'large'} />
       {
         LocationID.location_code
         ?
         <View style={{padding: 10, width: '100%', position: 'absolute', top: 30, left: 0, zIndex: 1, flexDirection: 'row', justifyContent: 'center'}}>
-          <Text style={{backgroundColor: '#4385F5', color: '#fff', paddingVertical: 2, paddingHorizontal: 10, borderRadius: 5}}>{LocationID.location_name}</Text>
+          <Text style={{backgroundColor: '#898989', color: '#fff', paddingVertical: 2, paddingHorizontal: 10, borderRadius: 5}}>{LocationID.location_name}</Text>
         </View>
         :null
       }
@@ -487,16 +548,15 @@ const Operations = ( { route, navigation } ) => {
           <SimpleLineIcons name="reload" size={24} color="black" />
           <Text style={{ textAlign: 'center', fontSize: 10 }}>Reload</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={ () => setOpenAttMenu(!openAttMenu) } style={{ width: '25%', padding: 15, alignItems: 'center', position: 'relative' }}>
+        <TouchableOpacity style={{ width: '25%', padding: 15, alignItems: 'center', position: 'relative' }}>
           <Avatar.Text
-            style={{backgroundColor: '#4385F5'}}
+            style={{backgroundColor: '#898989'}}
             label={name.substring(0,1)}
             color={'#ffffff'}
             size={40}
           />
         </TouchableOpacity>
       </View>
-      {console.log(Position)}
       {
         Position.lat !== 0 && Position.long !== 0
         ?
@@ -524,16 +584,15 @@ const Operations = ( { route, navigation } ) => {
                   }}    
                   title={LocationID.location_name}
                   description={ LocationID.location_address }
-                  // image={{uri: 'https://i.ibb.co/sj5Hb8F/office-building-concept-Q9x-A343-600.png'}}
                 >
-                  <Image source={require('../assets/home.png')} style={{height: 40, width: 40 }} />
+                  {/* <Image source={require('../assets/home.png')} style={{height: 40, width: 40 }} /> */}
                 </Marker>
                 <Circle
                   center={{
                     latitude: parseFloat(LocationID.latitude),
                     longitude: parseFloat(LocationID.longitude),
                   }}
-                  strokeColor={'#2abbac'}
+                  strokeColor={'#000'}
                   strokeWidth={2}
                   fillColor={ 'rgba(37, 55, 84, 0.2)' }
                   radius={500}
@@ -551,27 +610,55 @@ const Operations = ( { route, navigation } ) => {
             description={"You"}
             // image={{uri: 'https://i.ibb.co/0tsmC3F/208-2088909-professional-employee-png-transparent-png-download.png'}}
           >
-            <Image source={require('../assets/pin.png')} style={{height: 40, width: 40 }} />
+            {/* <Image source={require('../assets/pin.png')} style={{height: 40, width: 40 }} /> */}
           </Marker>
         </MapView>
         :null
       }
       {
-        openAttMenu && (
+        openAttMenu && !SelectingLocation && (
           <>
-            <ScrollView style={{ paddingRight: 30, backgroundColor: 'rgba(255, 255, 255, 0.9)', zIndex: 2, position: 'absolute', bottom: 75, left: 30 }} showsVerticalScrollIndicator={false}>
-              <TouchableOpacity onPress={TimeIn} style={{ width: '100%', padding: 5, flexDirection: 'row', gap: 5 }}>
-                <AntDesign name="arrowright" size={20} color="black" />
-                <Text style={{ color: '#000', fontSize: 12 }}>
-                  Time In
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={TimeOut} style={{ width: '100%', padding: 5, flexDirection: 'row', gap: 5 }}>
-                <AntDesign name="arrowright" size={20} color="black" />
-                <Text style={{ color: '#000', fontSize: 12 }}>
-                  Time Out
-                </Text>
-              </TouchableOpacity>
+            <ScrollView style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 2, position: 'absolute', top: 0, left: 0, width: width, height: height * 0.955 }} showsVerticalScrollIndicator={false}>
+              {
+                !Category
+                ?<View style={{alignItems: 'center', justifyContent: 'space-around', width: width, height: height * 0.955}}><Text style={{color: '#fff', fontSize: RFPercentage(3)}}>Loading...</Text></View>:
+                Category[0]?.att_category !== 'General'
+                ?
+                <View style={{alignItems: 'center', justifyContent: 'space-around', width: width, height: height * 0.955}}>
+                  <TouchableOpacity onPress={TimeIn} style={{width: width, alignItems: 'center'}}>
+                    <Ionicons name="timer-outline" size={RFPercentage(12)} color="white" />
+                    <Text style={{ color: '#fff', fontSize: RFPercentage(3) }}>
+                      Start Shift
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={TimeOut} style={{width: width, alignItems: 'center'}}>
+                    <MaterialCommunityIcons name="clock-time-one" size={RFPercentage(12)} color="white" />
+                    <Text style={{ color: '#fff', fontSize: RFPercentage(3) }}>
+                      Shift End
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                :
+                <View style={{alignItems: 'center', justifyContent: 'space-around', width: width, height: height * 0.955}}>
+                  {
+                    StartShift
+                    ?
+                    <TouchableOpacity onPress={TimeIn} style={{width: width, alignItems: 'center'}}>
+                      <Ionicons name="timer-outline" size={RFPercentage(12)} color="white" />
+                      <Text style={{ color: '#fff', fontSize: RFPercentage(3) }}>
+                        Start Shift
+                      </Text>
+                    </TouchableOpacity>
+                    :
+                    <TouchableOpacity onPress={TimeOut} style={{width: width, alignItems: 'center'}}>
+                      <MaterialCommunityIcons name="clock-time-one" size={RFPercentage(12)} color="white" />
+                      <Text style={{ color: '#fff', fontSize: RFPercentage(3) }}>
+                        Shift End
+                      </Text>
+                    </TouchableOpacity>
+                  }
+                </View>
+              }
             </ScrollView>
           </>
         )
@@ -582,7 +669,7 @@ const Operations = ( { route, navigation } ) => {
           <ScrollView style={{ padding: 20, backgroundColor: 'rgba(255, 255, 255, 0.9)', zIndex: 2, maxHeight: '50%', position: 'absolute', top: '20%', borderRadius: 5, left: '7.5%', width: '85%' }} showsVerticalScrollIndicator={false}>
             <Text style={{ fontSize: 15, marginBottom: 10, fontWeight: 'bold' }}>Select Location</Text>
             <TouchableOpacity key={ 99999 } onPress={ () => setLocationID({index: 99999, location_code: 99999, location_name: "Other", latitude: undefined, longitude: undefined, location_address: "Unknown Location"}) } style={{ width: '100%', padding: 10 }}>
-              <Text style={{ color: LocationID.index ===99999 ? '#4385F5' : '#000', fontSize: 15 }}>
+              <Text style={{ color: LocationID.index === 99999 ? '#898989' : '#000', fontSize: 15 }}>
                 Other Location
               </Text>
             </TouchableOpacity>
@@ -602,13 +689,13 @@ const Operations = ( { route, navigation } ) => {
             }
             <View style={{ height: 50 }}></View>
           </ScrollView>
-          <TouchableOpacity onPress={ () => setSelectingLocation(false) } style={{ zIndex: 2, backgroundColor: '#4385F5', paddingVertical: 5, paddingHorizontal: 10, borderRadius: 5, position: 'absolute', top: 170, right: '13%' }}>
+          <TouchableOpacity onPress={ () => setSelectingLocation(false) } style={{ zIndex: 2, backgroundColor: '#898989', paddingVertical: 5, paddingHorizontal: 10, borderRadius: 5, position: 'absolute', top: 170, right: '13%' }}>
             <Text style={{ color: '#fff', textAlign: 'center', fontSize: 12 }}>Close</Text>
           </TouchableOpacity>
         </>
         :null
       }
-      <Animated.Text style={{fontSize: 10, fontFamily: "antfill", borderRadius: 10, position: 'absolute', top: alertTop, textAlign: 'center', left: '25%', width: '50%', backgroundColor: "rgba(255, 255, 255, .8)", zIndex: 1, padding: 10, opacity: alertOpacity}}>You're out of location! {Math.round(Distance)}km away.</Animated.Text>
+      <Animated.Text style={{fontSize: 10, borderRadius: 10, position: 'absolute', top: alertTop, textAlign: 'center', left: '25%', width: '50%', backgroundColor: "rgba(255, 255, 255, .8)", zIndex: 1, padding: 10, opacity: alertOpacity}}>You're out of location! {Math.round(Distance)}km away.</Animated.Text>
     </>
   );
 

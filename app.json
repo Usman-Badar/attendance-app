@@ -26,7 +26,8 @@
           "savePhotosPermission": "Allow $(PRODUCT_NAME) to save photos.",
           "isAccessMediaLocationEnabled": true
         }
-      ]
+      ],
+      "expo-font"
     ],
     "splash": {
       "image": "./assets/splash.png",
@@ -46,7 +47,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.usmanbadar.attendanceapp",
-      "versionCode": 12,
+      "versionCode": 14,
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyCXf-3r_0uMjpEzwZKA_MfIVBMbCY8xAlo"

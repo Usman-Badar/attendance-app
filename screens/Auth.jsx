@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Text, View, StyleSheet, Linking, TouchableOpacity, ToastAndroid, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Text, View, StyleSheet, Linking, TouchableOpacity, ToastAndroid, KeyboardAvoidingView, Platform, ScrollView, BackHandler } from 'react-native';
 import axios from 'axios';
 
 import * as FileSystem from 'expo-file-system';
@@ -14,6 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Feather } from '@expo/vector-icons';
 import { FontAwesome } from '@expo/vector-icons';
 import {Dimensions} from "react-native";
+import { RFPercentage } from 'react-native-responsive-fontsize';
+import Loader from "react-native-modal-loader";
 
 const {width, height} = Dimensions.get("window");
 
@@ -24,6 +26,7 @@ const Auth = ( { navigation } ) => {
     const File = Directory + '/emp_id.txt';
     const url = 'https://202.63.220.170:3443';
 
+    const [ loadingState, setLoadingState ] = useState(false);
     const [ disabled, setDisabled ] = useState(false);
     const [ isToEnterCode, setIsToEnterCode ] = useState(false);
     const [ WhatsappNumber, setWhatsappNumber ] = useState('');
@@ -75,15 +78,15 @@ const Auth = ( { navigation } ) => {
             );
             return false;
         }
-        Toast.loading("Please Wait...");
         setValidation(true);
         if( contractual ) {
             if ( code === Code ) {
+                createTextFile( { name: contractual[0].name, emp_id: contractual[0].temp_emp_id, url: url, password: Password, temp_emp_id: contractual[0].temp_emp_id } )
                 Modal.alert(
                     'Auth Success', 
                     'Your registration process has been completed.',
                     [
-                        { text: 'Okay', onPress: () => createTextFile( { name: contractual[0].name, emp_id: contractual[0].temp_emp_id, url: url, password: Password, temp_emp_id: contractual[0].temp_emp_id } ) },
+                        { text: 'Okay' },
                     ]
                 );
             }else {
@@ -97,6 +100,7 @@ const Auth = ( { navigation } ) => {
                 );
             }
         }else {
+            setLoadingState(true);
             axios.post(
                 url + '/attendance/auth',
                 {
@@ -104,16 +108,18 @@ const Auth = ( { navigation } ) => {
                 }
             ).then(
                 res => {
+                    setLoadingState(false);
                     setValidation(false);
                     if ( res.data.length > 0 )
                     {
                         if ( res.data[0].attendance_id == Code )
                         {
+                            createTextFile( { name: res.data[0].name, emp_id: res.data[0].emp_id, url: url, password: Password } )
                             Modal.alert(
-                                'Auth Success', 
+                                'OTP Matched', 
                                 'Your registration process has been completed.',
                                 [
-                                    { text: 'Okay', onPress: () => createTextFile( { name: res.data[0].name, emp_id: res.data[0].emp_id, url: url, password: Password } ) },
+                                    { text: 'Okay' },
                                 ]
                             );
                         }else
@@ -129,8 +135,8 @@ const Auth = ( { navigation } ) => {
                     }else
                     {
                         Modal.alert(
-                            'Auth Failed', 
-                            'No Record Found', 
+                            'OTP Match Failed', 
+                            'Could not matched the OTP, please try again later!', 
                             [
                                 { text: 'Try Again', onPress: () => console.log('ok') },
                             ]
@@ -139,6 +145,7 @@ const Auth = ( { navigation } ) => {
                 }
             ).catch(
                 err => {
+                    setLoadingState(false);
                     console.log(err);
                     setValidation(false);
                     Toast.offline(err.message)
@@ -149,11 +156,11 @@ const Auth = ( { navigation } ) => {
     const createTextFile = async ( obj ) => {
         setTimeout(() => {
             setView(1);
+            BackHandler.exitApp();
         }, 1000);
         await FileSystem.writeAsStringAsync(File, JSON.stringify(obj), { encoding: FileSystem.EncodingType.UTF8 });
         const asset = await MediaLibrary.createAssetAsync(File)
         await MediaLibrary.createAlbumAsync("Download", asset, false);
-        console.log('success: ', asset);
     }
     // const decrypt = (salt, encoded) => {
     //     if (salt !== null && encoded !== null) {
@@ -288,7 +295,7 @@ const Auth = ( { navigation } ) => {
     }
     const getCode = (otp) => {
         setDisabled(true);
-        Toast.loading("Please Wait...");
+        setLoadingState(true);
         axios.post(
             url + '/attendance/get_code',
             {
@@ -297,6 +304,7 @@ const Auth = ( { navigation } ) => {
             }
         ).then(
             res => {
+                setLoadingState(false);
                 setDisabled(false);
                 if (res.data === 'nothing_found')
                 {
@@ -332,6 +340,7 @@ const Auth = ( { navigation } ) => {
             }
         ).catch(
             err => {
+                setLoadingState(false);
                 setDisabled(false);
                 console.log(err);
                 setValidation(false);
@@ -343,6 +352,7 @@ const Auth = ( { navigation } ) => {
 
     return (
         <>
+            <Loader loading={loadingState} color="#898989" size={'large'} />
             {
                 View === 1
                 ?
@@ -411,7 +421,7 @@ const FirstView = ( { disabled, Password, setPassword, isBiometricSupported, bio
         <>
             <View style={ styles.container }>
                 <View style={{ flex: 7 }}>
-                    <Text style={styles.title}>SEABOARD</Text>
+                    <Text style={styles.title}>Attendance App</Text>
                     <Text style={{ color: '#898989', marginBottom: 50, textAlign: 'center' }}>Powered By Seatech</Text>
                     <View style={{ alignItems: 'center', display: 'flex' }}>
                         <Feather name="unlock" size={50} color="#fff" />
@@ -420,11 +430,11 @@ const FirstView = ( { disabled, Password, setPassword, isBiometricSupported, bio
                 {
                     isBiometricSupported
                     ?
-                    <View style={{ position: 'relative', borderColor: '#4385F5', borderWidth: 5, borderRadius: 30, justifyContent: 'center', flex: 10 }}>
+                    <View style={{ position: 'relative', borderColor: '#898989', borderWidth: 5, borderRadius: 30, justifyContent: 'center', flex: 10 }}>
 
                         <View>
                             <TouchableOpacity onPress={ biometricAuth } style={ styles.biometricBtn }>
-                                <Ionicons name="finger-print-outline" size={120} color="#4385F5" />
+                                <Ionicons name="finger-print-outline" size={120} color="#898989" />
                             </TouchableOpacity>
                         </View>
                         <View style={{ position: 'absolute', top: -10, left: '10%', padding: 10, width: '80%', backgroundColor: '#202124' }}></View>
@@ -435,7 +445,7 @@ const FirstView = ( { disabled, Password, setPassword, isBiometricSupported, bio
 
                     </View>
                     :
-                    <View style={{ position: 'relative', borderColor: '#4385F5', borderWidth: 5, borderRadius: 30, padding: 20, flex: 10 }}>
+                    <View style={{ position: 'relative', borderColor: '#898989', borderWidth: 5, borderRadius: 30, padding: 20, flex: 10 }}>
                         <Text style={{ color: "#fff" }}>Password</Text>
                         <TextareaItem
                             style={styles.input}
@@ -486,9 +496,9 @@ const Registration = ( { disabled, Password, setPassword, isToEnterCode, url, Wh
                         isToEnterCode
                         ?
                         <View style={{ flex: 2 }}>
-                            <Text style={{ fontSize: 15, color: "#898989" }}>OTP</Text>
+                            <Text style={{ fontSize: RFPercentage(2), color: "#898989" }}>OTP</Text>
                             <TextareaItem
-                                style={[styles.input, {borderRadius: 10}]}
+                                style={[styles.input, {borderRadius: 5}]}
                                 value={Code}
                                 onChangeText={(id) => setCode(id)}
                                 placeholder='Like. 123456'
@@ -497,29 +507,29 @@ const Registration = ( { disabled, Password, setPassword, isToEnterCode, url, Wh
                             />
                             <Text style={{ color: "#898989", marginTop: 10 }}>Set Password</Text>
                             <TextareaItem
-                                style={[styles.input, {borderRadius: 10}]}
+                                style={[styles.input, {borderRadius: 5}]}
                                 secureTextEntry
                                 value={Password}
                                 onChangeText={(id) => setPassword(id)}
                                 keyboardType='numeric'
                                 disabled={disabled}
                             />
-                            <TouchableOpacity disabled={ Validation } onPress={ authenticate } style={{ marginTop: 10, padding: 15, borderColor: '#fff', borderWidth: 1, borderRadius: 20 }}>
+                            <TouchableOpacity disabled={ Validation } onPress={ authenticate } style={{ marginTop: 10, padding: 15, borderColor: '#fff', borderWidth: 1, borderRadius: 5 }}>
                                 <Text style={{ color: '#fff', textAlign: 'center' }}>Confirm</Text>
                             </TouchableOpacity>
                         </View>
                         :
                         <View style={{ flex: 2 }}>
-                            <Text style={{ fontSize: 15, color: "#898989", textAlign: "center" }}>Your Whatsapp Number</Text>
+                            <Text style={{ fontSize: RFPercentage(2), color: "#898989", textAlign: "center" }}>Your Whatsapp Number</Text>
                             <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'center' }}>
                                 <TextareaItem
-                                    style={[styles.input, { paddingRight: 10, borderTopLeftRadius: 10, borderBottomLeftRadius: 10 }]}
+                                    style={[styles.input, { paddingRight: 10, borderTopLeftRadius: 5, borderBottomLeftRadius: 5 }]}
                                     value='92'
                                     keyboardType='numeric'
                                     disabled={ true }
                                 />
                                 <TextareaItem
-                                    style={[styles.input, { paddingRight: 10, width: width * 0.7, borderTopRightRadius: 10, borderBottomRightRadius: 10 }]}
+                                    style={[styles.input, { paddingRight: 10, width: width * 0.7, borderTopRightRadius: 5, borderBottomRightRadius: 5 }]}
                                     value={WhatsappNumber}
                                     onChangeText={(id) => setUserWhatsapp(id)}
                                     placeholder='3305677890'
@@ -528,7 +538,7 @@ const Registration = ( { disabled, Password, setPassword, isToEnterCode, url, Wh
                                     disabled={disabled}
                                 />
                             </View>
-                            <TouchableOpacity disabled={disabled} onPress={ getCode } style={{ marginTop: 20, padding: 15, borderColor: '#fff', borderWidth: 1, borderRadius: 20, width: width * 0.8, alignSelf: "center" }}>
+                            <TouchableOpacity disabled={disabled} onPress={ getCode } style={{ marginTop: 20, padding: 15, borderColor: '#fff', borderWidth: 1, borderRadius: 5, width: width * 0.8, alignSelf: "center" }}>
                                 <Text style={{ color: '#fff', textAlign: 'center' }}>Get Code</Text>
                             </TouchableOpacity>
                         </View>
@@ -543,10 +553,9 @@ const Registration = ( { disabled, Password, setPassword, isToEnterCode, url, Wh
 const styles = StyleSheet.create(
     {
         title: {
-            fontSize: 30,
+            fontSize: RFPercentage(4),
             textAlign: 'center',
-            letterSpacing: 10,
-            fontFamily: 'cinzel',
+            letterSpacing: 3,
             color: "#fff"
         },
         container: {
@@ -558,7 +567,8 @@ const styles = StyleSheet.create(
         input: {
             height: 44,
             padding: 10,
-            marginVertical: 10,
+            marginBottom: 10,
+            marginTop: 5,
         },
         biometricBtn: {
             alignItems: 'center'
